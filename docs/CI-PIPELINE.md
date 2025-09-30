@@ -235,10 +235,6 @@ Résultats à voir:
 
 ---
 
-Besoin d’adapter ce pipeline (déploiement, quality gates, CodeQL, etc.) ? Dites ce que vous souhaitez et on l’intègre proprement.
-
----
-
 ## 12) Couverture: débloquer `.coverage` et générer un rapport HTML (Windows)
 
 Contexte: le fichier `.coverage` produit par pytest-cov en CI/containers peut contenir des chemins de fichiers différents de votre machine locale (ex: `C:\\work\\app_bank` ou `/work/app_bank`). Sans mappage, `coverage` ne retrouve pas les sources et affiche des avertissements du type “Couldn't parse ... No source for code” ou “No data to report”.
