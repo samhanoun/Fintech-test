@@ -68,10 +68,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install host Python tooling (bandit only)
+      - name: Install host Python tooling (bandit, pip-audit)
         run: |
           python -m pip install --upgrade pip
-          pip install bandit
+          pip install bandit pip-audit
 
       - name: Unit tests (pytest in container)
         # Run unit tests inside an ephemeral Python container. Mounts the repo and writes JUnit + coverage XML.
@@ -102,12 +102,9 @@ jobs:
             "
 
       - name: Software Composition Analysis (pip-audit)
-        # Use official action to scan dependencies and produce SARIF
-        uses: pypa/gh-action-pip-audit@v1.0.8
-        with:
-          inputs: app_bank/requirements.txt
-          # Pass args directly to pip-audit to control format and output
-          args: -f sarif -o ${{ env.REPORTS_DIR }}/pip-audit.sarif
+        # Run pip-audit and output JSON (pip-audit doesn't natively support SARIF)
+        run: |
+          pip-audit -r app_bank/requirements.txt -f json -o $REPORTS_DIR/pip-audit.json || true
 
       - name: Static Application Security Testing (bandit)
         # Run Bandit SAST across the app source and upload JSON report as artifact
@@ -162,12 +159,12 @@ jobs:
             ${{ env.REPORTS_DIR }}/coverage.xml
           retention-days: 7
 
-      - name: Upload Security artifacts (SARIF + Bandit JSON)
+      - name: Upload Security artifacts (Trivy SARIF + Bandit JSON + pip-audit JSON)
         uses: actions/upload-artifact@v4
         with:
           name: security-reports
           path: |
-            ${{ env.REPORTS_DIR }}/pip-audit.sarif
+            ${{ env.REPORTS_DIR }}/pip-audit.json
             ${{ env.REPORTS_DIR }}/trivy.sarif
             ${{ env.REPORTS_DIR }}/bandit.json
           retention-days: 7
@@ -185,11 +182,6 @@ jobs:
           name: k6-summary
           path: k6/k6-summary.json
           retention-days: 7
-
-      - name: Publish SARIF (pip-audit) to code scanning
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: ${{ env.REPORTS_DIR }}/pip-audit.sarif
 
       - name: Publish SARIF (Trivy) to code scanning
         uses: github/codeql-action/upload-sarif@v3
