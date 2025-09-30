@@ -1,0 +1,13 @@
+﻿Name                              Stmts   Miss  Cover   Missing
+---------------------------------------------------------------
+app_bank\__init__.py                  0      0   100%
+app_bank\app.py                      39      2    95%   65-66
+app_bank\create_users.py             14     14     0%   1-25
+app_bank\extensions.py                4      0   100%
+app_bank\models.py                   22      1    95%   20
+app_bank\routes\auth.py              41     27    34%   10, 15-26, 32-33, 37-58
+app_bank\routes\health.py             6      0   100%
+app_bank\routes\main.py               5      1    80%   8
+app_bank\routes\transactions.py      99     71    28%   14-30, 38-43, 52-104, 110-114, 124-145, 152-153, 158-182
+---------------------------------------------------------------
+TOTAL                               230    116    50%

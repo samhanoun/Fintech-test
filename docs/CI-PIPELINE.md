@@ -236,3 +236,52 @@ Résultats à voir:
 ---
 
 Besoin d’adapter ce pipeline (déploiement, quality gates, CodeQL, etc.) ? Dites ce que vous souhaitez et on l’intègre proprement.
+
+---
+
+## 12) Couverture: débloquer `.coverage` et générer un rapport HTML (Windows)
+
+Contexte: le fichier `.coverage` produit par pytest-cov en CI/containers peut contenir des chemins de fichiers différents de votre machine locale (ex: `C:\\work\\app_bank` ou `/work/app_bank`). Sans mappage, `coverage` ne retrouve pas les sources et affiche des avertissements du type “Couldn't parse ... No source for code” ou “No data to report”.
+
+### 12.1 Correction mise en place
+
+Ajout d’un fichier `.coveragerc` à la racine du repo pour résoudre les chemins et fixer la destination HTML:
+
+- Fichier: `.coveragerc`
+- Contenu clé:
+  - `[run]` → `source = app_bank`
+  - `[paths]` → `source = app_bank`, `*/work/app_bank`, `*/workspace/app_bank`, `C:\\work\\app_bank`
+  - `[report]` → `show_missing = True`, `ignore_errors = True`
+  - `[html]` → `directory = reports/htmlcov`
+
+Objectif: dire à `coverage` que les fichiers référencés sous ces différents préfixes correspondent à votre dossier local `app_bank/`.
+
+### 12.2 Générer des rapports lisibles depuis `.coverage`
+
+Si `coverage` n’est pas installé pour le lanceur Python Windows:
+
+```powershell
+py -m ensurepip --upgrade
+py -m pip install coverage
+```
+
+Sur Windows PowerShell, si `coverage.exe` n’est pas dans le PATH, utilisez le chemin complet (remplacez si besoin par votre chemin local):
+
+```powershell
+# Rapport HTML
+& 'C:\\Users\\harry\\Downloads\\Fintech-test-main\\Fintech-test-main\\Scripts\\coverage.exe' html -d reports\\htmlcov -i
+
+# Rapport texte lisible
+& 'C:\\Users\\harry\\Downloads\\Fintech-test-main\\Fintech-test-main\\Scripts\\coverage.exe' report -m | Out-File -Encoding utf8 reports\\coverage.txt
+
+# Rapport JSON
+& 'C:\\Users\\harry\\Downloads\\Fintech-test-main\\Fintech-test-main\\Scripts\\coverage.exe' json -o reports\\coverage.json
+```
+
+Ensuite, ouvrez le fichier `reports/htmlcov/index.html` dans votre navigateur (clic droit > Reveal in File Explorer > double-clic).
+
+### 12.3 Notes utiles
+
+- Si “No data to report” persiste, vérifiez que `.coveragerc` est bien à la racine du repo (même dossier que `.coverage`) et que la section `[paths]` couvre les préfixes vus dans les avertissements (`C:\\work\\app_bank`, `/work/app_bank`, etc.).
+- Vous pouvez aussi régénérer `.coverage` en relançant localement `pytest --cov=app_bank --cov-report xml:reports/coverage.xml`, ce qui créera un `.coverage` adapté à votre machine.
+- Les patterns `*/work/app_bank` (Linux runners) et `C:\\work\\app_bank` (Windows) couvrent la plupart des cas CI/containers.

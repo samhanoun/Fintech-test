@@ -1,0 +1,18 @@
+[run]
+# Limit to our app sources
+source = app_bank
+
+[paths]
+# Map paths recorded inside containers/CI to local workspace so coverage can find files
+source =
+    app_bank
+    */work/app_bank
+    */workspace/app_bank
+    C:\work\app_bank
+
+[report]
+ignore_errors = True
+show_missing = True
+
+[html]
+directory = reports/htmlcov
