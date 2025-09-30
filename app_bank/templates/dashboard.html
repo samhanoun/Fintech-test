@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinTech Solutions - Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <style>
+        .user-menu {
+            position: relative;
+        }
+
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            margin-top: 10px;
+            min-width: 200px;
+            z-index: 1000;
+        }
+
+        .dropdown-menu.show {
+            display: block;
+        }
+
+        .dropdown-item {
+            padding: 12px 20px;
+            color: #333;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.3s;
+        }
+
+        .dropdown-item:hover {
+            background: #f5f5f5;
+        }
+
+        .dropdown-item:first-child {
+            border-radius: 10px 10px 0 0;
+        }
+
+        .dropdown-item:last-child {
+            border-radius: 0 0 10px 10px;
+            border-top: 1px solid #eee;
+            color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <span>💳</span>
+            <span>FinTech Solutions</span>
+        </div>
+        <div class="user-info">
+            <span>{{ current_user.username }}</span>
+            <div class="user-menu">
+                <div class="user-avatar" onclick="toggleMenu()" style="cursor: pointer;">
+                    {{ current_user.username[0]|upper }}
+                </div>
+                <div class="dropdown-menu" id="userDropdown">
+                    <a href="#" class="dropdown-item" onclick="showProfile(); return false;">
+                        <span>👤</span>
+                        <span>Mon profil</span>
+                    </a>
+                    <a href="#" class="dropdown-item" onclick="showSettings(); return false;">
+                        <span>⚙️</span>
+                        <span>Paramètres</span>
+                    </a>
+                    <a href="{{ url_for('auth.logout') }}" class="dropdown-item">
+                        <span>🚪</span>
+                        <span>Déconnexion</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="welcome-section">
+            <h1>Bienvenue, {{ current_user.username }} ! 👋</h1>
+            <p>Voici un aperçu de votre compte bancaire</p>
+        </div>
+
+        <div class="cards-grid">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Solde actuel</span>
+                    <div class="card-icon icon-balance">💰</div>
+                </div>
+                <div class="card-value">{{ "%.2f"|format(current_user.balance) }} €</div>
+                <div class="card-subtitle">Compte principal</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Revenus ce mois</span>
+                    <div class="card-icon icon-income">📈</div>
+                </div>
+                <div class="card-value">+{{ "%.2f"|format(revenus) }} €</div>
+                <div class="card-subtitle">Mois en cours</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Dépenses ce mois</span>
+                    <div class="card-icon icon-expense">📉</div>
+                </div>
+                <div class="card-value">-{{ "%.2f"|format(depenses) }} €</div>
+                <div class="card-subtitle">Mois en cours</div>
+            </div>
+        </div>
+
+        <div class="actions-section">
+            <h2 class="section-title">Actions rapides</h2>
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="window.location.href='{{ url_for('transactions.transfer') }}'">
+                    <span>💸</span>
+                    <span>Faire un virement</span>
+                </button>
+                <button class="btn btn-secondary" onclick="window.location.href='{{ url_for('transactions.accounting') }}'">
+                    <span>📊</span>
+                    <span>Voir les statistiques</span>
+                </button>
+                <button class="btn btn-secondary" onclick="window.location.href='{{ url_for('transactions.trading') }}'">
+                    <span>📈</span>
+                    <span>Trading</span>
+                </button>
+                <button class="btn btn-secondary" onclick="alert('Fonction à venir')">
+                    <span>📄</span>
+                    <span>Télécharger relevé</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="transactions-section">
+            <h2 class="section-title">Dernières transactions</h2>
+            
+            {% if transactions %}
+                {% for transaction in transactions %}
+                <div class="transaction-item">
+                    <div class="transaction-info">
+                        <div class="transaction-icon {% if transaction.amount > 0 %}income{% else %}expense{% endif %}">
+                            {% if transaction.amount > 0 %}📥{% else %}📤{% endif %}
+                        </div>
+                        <div class="transaction-details">
+                            <h4>{{ transaction.type }}</h4>
+                            <p>{{ transaction.created_at }}</p>
+                        </div>
+                    </div>
+                    <div class="transaction-amount {% if transaction.amount > 0 %}positive{% else %}negative{% endif %}">
+                        {{ "%.2f"|format(transaction.amount) }} €
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="text-align: center; color: #999; padding: 20px;">Aucune transaction pour le moment</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('userDropdown').classList.toggle('show');
+        }
+
+        // Fermer le menu si on clique ailleurs
+        window.onclick = function(event) {
+            if (!event.target.matches('.user-avatar')) {
+                var dropdown = document.getElementById('userDropdown');
+                if (dropdown && dropdown.classList.contains('show')) {
+                    dropdown.classList.remove('show');
+                }
+            }
+        }
+
+        function showProfile() {
+            alert('Profil utilisateur:\n\nNom: {{ current_user.username }}\nSolde: {{ "%.2f"|format(current_user.balance) }} €');
+        }
+
+        function showSettings() {
+            alert('Paramètres à venir');
+        }
+    </script>
+</body>
+</html>

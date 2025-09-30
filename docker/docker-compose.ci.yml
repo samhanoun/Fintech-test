@@ -1,0 +1,22 @@
+version: '3.9'
+services:
+  bank_api:
+    image: bank-api:ci  # built in CI job
+    container_name: bank_api_ci
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=sqlite:////data/transactions.db
+      - SECRET_KEY=ci-secret
+    ports:
+      - "5000:5000"
+    volumes:
+      - bank_api_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/health').getcode()==200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+volumes:
+  bank_api_data: {}

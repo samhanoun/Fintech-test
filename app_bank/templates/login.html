@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinTech Solutions - Connexion</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+</head>
+<body>
+    <div class="login-container">
+        <div class="left-section">
+            <div class="logo">
+                <div class="logo-icon">💳</div>
+                <span>FinTech</span>
+            </div>
+            <div class="tagline">
+                Solutions bancaires sécurisées pour les professionnels
+            </div>
+            <ul class="features">
+                <li>Transactions sécurisées en temps réel</li>
+                <li>Gestion multi-comptes simplifiée</li>
+                <li>Conformité réglementaire garantie</li>
+                <li>Support client 24/7</li>
+            </ul>
+        </div>
+
+        <div class="right-section">
+            <h2>Connexion</h2>
+            <p class="subtitle">Accédez à votre espace bancaire professionnel</p>
+
+            <!-- Afficher les messages d'erreur Flask -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="error-message">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- CORRECTION ICI : auth.login au lieu de login -->
+            <form action="{{ url_for('auth.login') }}" method="POST">
+                <div class="form-group">
+                    <label for="username">Nom d'utilisateur</label>
+                    <input type="text" id="username" name="username" placeholder="Entrez votre nom d'utilisateur" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Mot de passe</label>
+                    <input type="password" id="password" name="password" placeholder="Entrez votre mot de passe" required>
+                </div>
+
+                <button type="submit" class="btn-login">Se connecter</button>
+            </form>
+
+            <div class="forgot-password">
+                <a href="#">Mot de passe oublié ?</a>
+            </div>
+
+            <div class="divider">OU</div>
+
+            <div class="signup-link">
+                Pas encore de compte ? <a href="{{ url_for('auth.register') }}">Créer un compte</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading - FinTech Solutions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <style>
+        .trading-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        .stock-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+        }
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .stock-name {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #333;
+        }
+        .stock-price {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .stock-change {
+            font-size: 0.9rem;
+            padding: 5px 10px;
+            border-radius: 5px;
+            margin-top: 5px;
+        }
+        .stock-change.positive {
+            background: #e8f5e9;
+            color: #4caf50;
+        }
+        .stock-change.negative {
+            background: #ffebee;
+            color: #f44336;
+        }
+        .trade-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .btn-buy {
+            padding: 12px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-sell {
+            padding: 12px;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .portfolio-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <span>💳</span>
+            <span>FinTech Solutions</span>
+        </div>
+        <div class="user-info">
+            <a href="{{ url_for('transactions.dashboard') }}" style="color: white; margin-right: 20px; text-decoration: none;">← Retour</a>
+            <span>{{ current_user.username }}</span>
+            <div class="user-avatar">{{ current_user.username[0]|upper }}</div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1 style="margin-bottom: 10px;">📈 Trading</h1>
+        <p style="color: #666; margin-bottom: 30px;">Votre solde disponible: <strong>{{ "%.2f"|format(current_user.balance) }} €</strong></p>
+
+        <div class="trading-grid">
+            <div class="stock-card">
+                <div class="stock-header">
+                    <div>
+                        <div class="stock-name">Apple Inc.</div>
+                        <div style="color: #999; font-size: 0.9rem;">AAPL</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div class="stock-price">185.50 €</div>
+                        <div class="stock-change positive">+2.5%</div>
+                    </div>
+                </div>
+                <div class="trade-buttons">
+                    <button class="btn-buy" onclick="buyStock('AAPL', 185.50)">Acheter</button>
+                    <button class="btn-sell" onclick="sellStock('AAPL', 185.50)">Vendre</button>
+                </div>
+            </div>
+
+            <div class="stock-card">
+                <div class="stock-header">
+                    <div>
+                        <div class="stock-name">Microsoft</div>
+                        <div style="color: #999; font-size: 0.9rem;">MSFT</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div class="stock-price">420.00 €</div>
+                        <div class="stock-change positive">+1.8%</div>
+                    </div>
+                </div>
+                <div class="trade-buttons">
+                    <button class="btn-buy" onclick="buyStock('MSFT', 420.00)">Acheter</button>
+                    <button class="btn-sell" onclick="sellStock('MSFT', 420.00)">Vendre</button>
+                </div>
+            </div>
+
+            <div class="stock-card">
+                <div class="stock-header">
+                    <div>
+                        <div class="stock-name">Tesla</div>
+                        <div style="color: #999; font-size: 0.9rem;">TSLA</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div class="stock-price">245.00 €</div>
+                        <div class="stock-change negative">-0.5%</div>
+                    </div>
+                </div>
+                <div class="trade-buttons">
+                    <button class="btn-buy" onclick="buyStock('TSLA', 245.00)">Acheter</button>
+                    <button class="btn-sell" onclick="sellStock('TSLA', 245.00)">Vendre</button>
+                </div>
+            </div>
+
+            <div class="stock-card">
+                <div class="stock-header">
+                    <div>
+                        <div class="stock-name">Amazon</div>
+                        <div style="color: #999; font-size: 0.9rem;">AMZN</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div class="stock-price">178.50 €</div>
+                        <div class="stock-change positive">+3.2%</div>
+                    </div>
+                </div>
+                <div class="trade-buttons">
+                    <button class="btn-buy" onclick="buyStock('AMZN', 178.50)">Acheter</button>
+                    <button class="btn-sell" onclick="sellStock('AMZN', 178.50)">Vendre</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="portfolio-section">
+            <h2 style="margin-bottom: 20px;">📊 Mon Portefeuille</h2>
+            {% if portfolio %}
+                {% for stock in portfolio %}
+                <div style="display: flex; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #f0f0f0;">
+                    <div>
+                        <div style="font-weight: 600;">{{ stock.symbol }}</div>
+                        <div style="font-size: 0.85rem; color: #999;">{{ stock.quantity }} actions</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-weight: bold;">{{ "%.2f"|format(stock.total_value) }} €</div>
+                        <div style="font-size: 0.85rem; color: {{ '#4caf50' if stock.profit > 0 else '#f44336' }};">
+                            {{ "%.2f"|format(stock.profit) }} €
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="text-align: center; color: #999; padding: 20px;">Vous n'avez pas encore d'actions</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function buyStock(symbol, price) {
+            const quantity = prompt(`Combien d'actions ${symbol} voulez-vous acheter?\n\nPrix unitaire: ${price}€`);
+            if (quantity && quantity > 0) {
+                const total = price * quantity;
+                if (confirm(`Confirmer l'achat de ${quantity} actions ${symbol} pour ${total.toFixed(2)}€ ?`)) {
+                    window.location.href = `/trading/buy?symbol=${symbol}&quantity=${quantity}&price=${price}`;
+                }
+            }
+        }
+
+        function sellStock(symbol, price) {
+            const quantity = prompt(`Combien d'actions ${symbol} voulez-vous vendre?\n\nPrix unitaire: ${price}€`);
+            if (quantity && quantity > 0) {
+                const total = price * quantity;
+                if (confirm(`Confirmer la vente de ${quantity} actions ${symbol} pour ${total.toFixed(2)}€ ?`)) {
+                    window.location.href = `/trading/sell?symbol=${symbol}&quantity=${quantity}&price=${price}`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

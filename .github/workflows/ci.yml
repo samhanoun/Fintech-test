@@ -1,0 +1,235 @@
+## CI/CD pipeline for Flask app (Dockerized)
+## Triggers: push, pull_request (all branches), workflow_dispatch (manual)
+## Includes: Build, Unit/Integration tests, SCA (pip-audit), SAST (bandit), Image scan (Trivy),
+##           DAST baseline (ZAP), k6 smoke test, artifact uploads, SARIF publishing, optional Slack notify.
+## Secrets to add (optional): SLACK_WEBHOOK_URL in Settings > Secrets and variables > Actions
+name: CI
+
+on:
+  push: {}
+  pull_request: {}
+  workflow_dispatch: {}
+
+concurrency:
+  # Cancel in-progress runs for the same branch to save minutes
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Build, Test, Scan, DAST, Perf
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write  # needed for uploading SARIF to code scanning
+      actions: read
+      checks: write
+      id-token: write
+
+    env:
+      IMAGE_TAG: bank-api:ci
+      REPORTS_DIR: reports
+      ZAP_OUT_DIR: zap-reports
+
+    steps:
+      - name: Checkout repository
+        # Fetch the source code so we can build and test
+        uses: actions/checkout@v4
+
+      - name: Create reports directories
+        # Prepare folders for all outputs and artifacts
+        run: |
+          mkdir -p $REPORTS_DIR
+          mkdir -p $ZAP_OUT_DIR
+
+      - name: Build API Docker image
+        # Build the API image from app_bank/Dockerfile using a local CI tag
+        run: |
+          docker build -t $IMAGE_TAG app_bank
+
+      - name: Start API via Docker Compose
+        # Launch the API container exposing port 5000. Compose file references the built image.
+        run: |
+          docker compose -f docker/docker-compose.ci.yml up -d
+
+      - name: Wait for API health endpoint
+        # Poll the /health endpoint until it's ready (up to ~30s)
+        run: |
+          for i in {1..15}; do
+            if curl -fsS http://localhost:5000/health > /dev/null; then
+              echo "API is healthy"; exit 0; fi; sleep 2; done
+          echo "API failed to become healthy"; docker compose -f docker/docker-compose.ci.yml logs --no-color || true
+          exit 1
+
+      - name: Set up Python for host-side tooling
+        # Used for pip-audit and bandit (runs on the host, tests run inside containers below)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install host Python tooling (bandit only)
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit
+
+      - name: Unit tests (pytest in container)
+        # Run unit tests inside an ephemeral Python container. Mounts the repo and writes JUnit + coverage XML.
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/work" \
+            -w /work \
+            python:3.11-slim bash -lc "\
+              set -euo pipefail; \
+              pip install --no-cache-dir -r app_bank/requirements.txt pytest pytest-cov requests junit-xml && \
+              mkdir -p $REPORTS_DIR && \
+              pytest -q tests/unit \
+                --junitxml $REPORTS_DIR/junit-unit.xml \
+                --cov=app_bank --cov-report xml:$REPORTS_DIR/coverage.xml \
+            "
+
+      - name: Integration tests (pytest in container, --network host)
+        # Run integration tests that hit http://localhost:5000 from inside a container; host networking allows access.
+        run: |
+          docker run --rm --network host \
+            -v "${{ github.workspace }}:/work" \
+            -w /work \
+            python:3.11-slim bash -lc "\
+              set -euo pipefail; \
+              pip install --no-cache-dir requests pytest junit-xml && \
+              mkdir -p $REPORTS_DIR && \
+              pytest -q tests/integration --junitxml $REPORTS_DIR/junit-integration.xml \
+            "
+
+      - name: Software Composition Analysis (pip-audit)
+        # Use official action to scan dependencies and produce SARIF
+        uses: pypa/gh-action-pip-audit@v1.0.8
+        with:
+          inputs: app_bank/requirements.txt
+          # Pass args directly to pip-audit to control format and output
+          args: -f sarif -o ${{ env.REPORTS_DIR }}/pip-audit.sarif
+
+      - name: Static Application Security Testing (bandit)
+        # Run Bandit SAST across the app source and upload JSON report as artifact
+        run: |
+          bandit -r app_bank -f json -o $REPORTS_DIR/bandit.json || true
+        # Bandit exit codes may be non-zero when findings exist; we don't fail the build on findings.
+
+      - name: Container image scan (Trivy)
+        # Scan the built image and output SARIF for GitHub code scanning. Only fail on HIGH/CRITICAL by default.
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_TAG }}
+          format: sarif
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          output: ${{ env.REPORTS_DIR }}/trivy.sarif
+
+      - name: DAST baseline (OWASP ZAP)
+        # Run ZAP Baseline against the local app and collect HTML/XML reports. Non-blocking.
+        continue-on-error: true
+        run: |
+          docker run --rm --network host \
+            -v "${{ github.workspace }}/docker/zap-baseline.conf:/zap/wrk/zap-baseline.conf" \
+            -v "${{ github.workspace }}/${{ env.ZAP_OUT_DIR }}:/zap/wrk" \
+            owasp/zap2docker-stable zap-baseline.py \
+              -t http://localhost:5000 \
+              -r zap-baseline-report.html \
+              -x zap-baseline-report.xml \
+              -w zap-warn.txt \
+              -c zap-baseline.conf \
+              -m 5
+
+      - name: k6 performance smoke
+        # Run a tiny k6 smoke test against the local app and export a JSON summary
+        run: |
+          docker run --rm --network host \
+            -v "${{ github.workspace }}/k6:/scripts" \
+            grafana/k6:0.51.0 run \
+              --vus 1 --duration 10s \
+              --summary-export=/scripts/k6-summary.json \
+              /scripts/perf-smoke.js
+
+      - name: Upload JUnit and Coverage artifacts
+        # Store unit + integration JUnit and coverage.xml as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            ${{ env.REPORTS_DIR }}/junit-unit.xml
+            ${{ env.REPORTS_DIR }}/junit-integration.xml
+            ${{ env.REPORTS_DIR }}/coverage.xml
+          retention-days: 7
+
+      - name: Upload Security artifacts (SARIF + Bandit JSON)
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            ${{ env.REPORTS_DIR }}/pip-audit.sarif
+            ${{ env.REPORTS_DIR }}/trivy.sarif
+            ${{ env.REPORTS_DIR }}/bandit.json
+          retention-days: 7
+
+      - name: Upload ZAP reports (HTML/XML)
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-reports
+          path: ${{ env.ZAP_OUT_DIR }}
+          retention-days: 7
+
+      - name: Upload k6 summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-summary
+          path: k6/k6-summary.json
+          retention-days: 7
+
+      - name: Publish SARIF (pip-audit) to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ env.REPORTS_DIR }}/pip-audit.sarif
+
+      - name: Publish SARIF (Trivy) to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ env.REPORTS_DIR }}/trivy.sarif
+
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker/docker-compose.ci.yml logs --no-color || true
+
+      - name: Slack notification on failure (optional)
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then \
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"text\": \"CI for ${{ github.repository }} (${{ github.ref_name }}) FAILED. Details: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+              "$SLACK_WEBHOOK_URL"; \
+          fi
+
+      - name: Tear down containers
+        if: always()
+        run: |
+          docker compose -f docker/docker-compose.ci.yml down -v
+
+# -------------------------------------------------------------
+# Notes & Secrets
+# - Add SLACK_WEBHOOK_URL in: Settings > Secrets and variables > Actions > New repository secret
+# - This workflow requires only Docker on the runner. All tests and tools run in containers or host Python.
+# - ZAP Baseline runs with continue-on-error: true so findings won't fail the build initially.
+# -------------------------------------------------------------
+
+# -------------------------------------------------------------
+# Prochaines évolutions (suggestions)
+# - Déploiement sur tag (ex: v*) vers un registre + environnement (GH Environments + secrets dédiés)
+# - Seuils k6 (p95 < X ms) et échec si dépassés; export InfluxDB/Grafana
+# - Qualité code (ruff/flake8, mypy) + formatting (black) avec checks bloquants
+# - Ajout CodeQL pour Python (github/codeql-action) pour analyses avancées SAST
+# - Cache pip pour accélérer installs; cache Docker layers si usage de registry
+# - Ajout SBOM (syft) et policy as code (Conftest/OPA) pour CI gates
+# -------------------------------------------------------------

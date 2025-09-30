@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comptabilité - FinTech Solutions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <span>💳</span>
+            <span>FinTech Solutions</span>
+        </div>
+        <div class="user-info">
+            <a href="{{ url_for('transactions.dashboard') }}" style="color: white; margin-right: 20px; text-decoration: none;">← Retour</a>
+            <span>{{ current_user.username }}</span>
+            <div class="user-avatar">{{ current_user.username[0]|upper }}</div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1 style="margin-bottom: 30px;">📊 Rapport Comptable</h1>
+
+        <div class="cards-grid">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Total Revenus</span>
+                    <div class="card-icon icon-income">💰</div>
+                </div>
+                <div class="card-value" style="color: #4caf50;">+{{ "%.2f"|format(total_revenus) }} €</div>
+                <div class="card-subtitle">Tous les temps</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Total Dépenses</span>
+                    <div class="card-icon icon-expense">💸</div>
+                </div>
+                <div class="card-value" style="color: #f44336;">-{{ "%.2f"|format(total_depenses) }} €</div>
+                <div class="card-subtitle">Tous les temps</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Bilan Net</span>
+                    <div class="card-icon">📈</div>
+                </div>
+                <div class="card-value" style="color: {{ '#4caf50' if (total_revenus - total_depenses) > 0 else '#f44336' }};">
+                    {{ "%.2f"|format(total_revenus - total_depenses) }} €
+                </div>
+                <div class="card-subtitle">Profit/Perte</div>
+            </div>
+        </div>
+
+        <div style="background: white; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.08); margin-top: 30px;">
+            <h2 style="margin-bottom: 20px;">Historique complet</h2>
+            {% for transaction in transactions %}
+            <div style="display: flex; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #f0f0f0;">
+                <div>
+                    <div style="font-weight: 600;">{{ transaction.type }}</div>
+                    <div style="font-size: 0.85rem; color: #999;">{{ transaction.created_at }}</div>
+                </div>
+                <div style="font-weight: bold; font-size: 1.1rem; color: {{ '#4caf50' if transaction.amount > 0 else '#f44336' }};">
+                    {{ "%.2f"|format(transaction.amount) }} €
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Créer un compte - FinTech Solutions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+</head>
+<body>
+    <div class="login-container">
+        <div class="left-section">
+            <div class="logo">
+                <div class="logo-icon">💳</div>
+                <span>FinTech</span>
+            </div>
+            <div class="tagline">
+                Solutions bancaires sécurisées pour les professionnels
+            </div>
+            <ul class="features">
+                <li>Transactions sécurisées en temps réel</li>
+                <li>Gestion multi-comptes simplifiée</li>
+                <li>Conformité réglementaire garantie</li>
+                <li>Support client 24/7</li>
+            </ul>
+        </div>
+
+        <div class="right-section">
+            <h2>Créer un compte</h2>
+            <p class="subtitle">Rejoignez FinTech Solutions</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="{{ 'success-message' if category == 'success' else 'error-message' }}">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form action="{{ url_for('auth.register') }}" method="POST">
+                <div class="form-group">
+                    <label for="username">Nom d'utilisateur</label>
+                    <input type="text" id="username" name="username" placeholder="Choisissez un nom d'utilisateur" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Mot de passe</label>
+                    <input type="password" id="password" name="password" placeholder="Choisissez un mot de passe" required>
+                </div>
+
+                <button type="submit" class="btn-login">Créer mon compte</button>
+            </form>
+
+            <div class="divider">OU</div>
+
+            <div class="signup-link">
+                Vous avez déjà un compte ? <a href="{{ url_for('auth.login') }}">Se connecter</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

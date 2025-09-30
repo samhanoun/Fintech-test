@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Créer un compte - FinTech Solutions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <style>
+        .form-container {
+            max-width: 500px;
+            margin: 40px auto;
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+        }
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        .btn-submit {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <span>💳</span>
+            <span>FinTech Solutions</span>
+        </div>
+        <div class="user-info">
+            <span>{{ current_user.username }}</span>
+            <div class="user-avatar">{{ current_user.username[0]|upper }}</div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="form-container">
+            <h2>👤 Créer un nouveau compte</h2>
+            <p style="color: #666; margin-bottom: 30px;">Ajouter un utilisateur à la plateforme</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div style="background: {{ '#e8f5e9' if category == 'success' else '#ffebee' }}; color: {{ '#2e7d32' if category == 'success' else '#c62828' }}; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('transactions.create_account') }}">
+                <div class="form-group">
+                    <label>Nom d'utilisateur</label>
+                    <input type="text" name="username" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Mot de passe</label>
+                    <input type="password" name="password" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Solde initial (€)</label>
+                    <input type="number" name="initial_balance" step="0.01" value="0" required>
+                </div>
+
+                <button type="submit" class="btn-submit">Créer le compte</button>
+                <a href="{{ url_for('transactions.dashboard') }}" style="display: block; text-align: center; margin-top: 15px; color: #667eea; text-decoration: none;">Annuler</a>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
