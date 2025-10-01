@@ -37,7 +37,12 @@ if [[ "$TARGET" == "uat" ]]; then
     IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" pull --quiet || true
   fi
   IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" up -d --build
-  bash scripts/wait_for_http.sh "$HEALTH_URL" 180
+  if ! bash scripts/wait_for_http.sh "$HEALTH_URL" 180; then
+    echo "[deploy][UAT] Health check failed. Dumping status and recent logs..." >&2
+    docker compose -f "$COMPOSE_FILE" ps || true
+    docker compose -f "$COMPOSE_FILE" logs --tail=200 api || true
+    exit 1
+  fi
   if [[ "$RUN_SMOKE" == "true" ]]; then
     echo "[deploy] Running k6 smoke against $HEALTH_URL"
     BASE_URL="http://host.docker.internal:5001"
@@ -92,7 +97,12 @@ if [[ "$TARGET" == "prod" ]]; then
   fi
 
   # Wait external health
-  bash scripts/wait_for_http.sh "$HEALTH_URL" 180
+  if ! bash scripts/wait_for_http.sh "$HEALTH_URL" 180; then
+    echo "[deploy][PROD] Health check failed after switch. Dumping status and recent logs..." >&2
+    docker compose -f "$COMPOSE_FILE" ps || true
+    docker compose -f "$COMPOSE_FILE" logs --tail=200 "api_$NEW_ACTIVE" || true
+    exit 1
+  fi
 
   if [[ "$RUN_SMOKE" == "true" ]]; then
     echo "[deploy] Running k6 smoke against $HEALTH_URL"
