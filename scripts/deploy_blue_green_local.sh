@@ -15,7 +15,8 @@ for arg in "$@"; do
     IMAGE_NAME=*) IMAGE_NAME="${arg#*=}" ;;
     IMAGE_TAG=*) IMAGE_TAG="${arg#*=}" ;;
     RUN_SMOKE=*) RUN_SMOKE="${arg#*=}" ;;
-    *) echo "Unknown arg: $arg" ;;
+  PRUNE_UAT=*) PRUNE_UAT="${arg#*=}" ;;
+  *) echo "Unknown arg: $arg" ;;
   esac
 done
 
@@ -24,6 +25,7 @@ MODE=${MODE:-image}         # image (pull) or build (local)
 IMAGE_NAME=${IMAGE_NAME:-ghcr.io/example-org/fintech-test/bank-api}
 IMAGE_TAG=${IMAGE_TAG:-latest}
 RUN_SMOKE=${RUN_SMOKE:-true}
+PRUNE_UAT=${PRUNE_UAT:-false}
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -33,11 +35,15 @@ if [[ "$TARGET" == "uat" ]]; then
   HEALTH_URL="http://localhost:5001/health"
   # UAT is single instance, no blue/green switch
   echo "[deploy] UAT deployment starting (MODE=$MODE, IMAGE=$IMAGE_NAME:$IMAGE_TAG)"
+  if [[ "$PRUNE_UAT" == "true" ]]; then
+    echo "[deploy] Pruning UAT stack and volumes to apply schema changes cleanly"
+    docker compose -f "$COMPOSE_FILE" down -v || true
+  fi
   if [[ "$MODE" == "image" ]]; then
     IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" pull --quiet || true
   fi
   IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" up -d --build
-  if ! bash scripts/wait_for_http.sh "$HEALTH_URL" 180; then
+  if ! bash scripts/wait_for_http.sh "$HEALTH_URL" 240; then
     echo "[deploy][UAT] Health check failed. Dumping status and recent logs..." >&2
     docker compose -f "$COMPOSE_FILE" ps || true
     docker compose -f "$COMPOSE_FILE" logs --tail=200 api || true

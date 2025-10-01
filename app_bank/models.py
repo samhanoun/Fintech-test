@@ -6,7 +6,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+    # Use a wider column to store modern password hashes (e.g., scrypt), which can exceed 128 chars
+    password_hash = db.Column(db.String(255), nullable=False)
     balance = db.Column(db.Numeric(18, 4), default=0)  # <- ajouté
 
 
