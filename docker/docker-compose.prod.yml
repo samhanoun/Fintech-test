@@ -1,5 +1,3 @@
-version: "3.9"
-
 # PROD stack: Postgres + API blue/green (two instances). Host ports 5434 (db) and 5002 (api).
 services:
   db:

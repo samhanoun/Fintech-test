@@ -42,7 +42,7 @@ if [[ "$TARGET" == "uat" ]]; then
   if [[ "$MODE" == "image" ]]; then
     IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" pull --quiet || true
   fi
-  IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" up -d --build
+  IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
   if ! bash scripts/wait_for_http.sh "$HEALTH_URL" 240; then
     echo "[deploy][UAT] Health check failed. Dumping status and recent logs..." >&2
     docker compose -f "$COMPOSE_FILE" ps || true
@@ -78,7 +78,7 @@ if [[ "$TARGET" == "prod" ]]; then
   if [[ "$MODE" == "image" ]]; then
     IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" --profile "$INACTIVE" pull --quiet || true
   fi
-  IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" --profile "$INACTIVE" up -d --build
+  IMAGE_NAME="$IMAGE_NAME" IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" --profile "$INACTIVE" up -d --build --remove-orphans
 
   # Healthcheck inactive slot internally (no host port). Use container exec via service name.
   echo "[deploy] Waiting for $INACTIVE service health"
@@ -95,11 +95,11 @@ if [[ "$TARGET" == "prod" ]]; then
   # Now bring up the new active (will publish 5002 when profile is blue)
   NEW_ACTIVE="$INACTIVE"; NEW_INACTIVE="$ACTIVE"
   if [[ "$NEW_ACTIVE" == "blue" ]]; then
-    docker compose -f "$COMPOSE_FILE" --profile blue up -d
+  docker compose -f "$COMPOSE_FILE" --profile blue up -d --remove-orphans
   else
     # Temporarily map 5002 for green by running a one-off publish using docker run
     # Simpler approach: re-use blue profile but with the new image tag (flip active slot file)
-    docker compose -f "$COMPOSE_FILE" --profile green up -d
+  docker compose -f "$COMPOSE_FILE" --profile green up -d --remove-orphans
   fi
 
   # Wait external health

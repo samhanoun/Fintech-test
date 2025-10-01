@@ -1,5 +1,3 @@
-version: "3.9"
-
 # UAT stack: Postgres + API (single instance), host ports 5433 (db) and 5001 (api)
 services:
   db:
