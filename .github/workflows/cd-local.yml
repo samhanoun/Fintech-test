@@ -80,6 +80,14 @@ jobs:
       - name: Ensure scripts are executable
         run: chmod +x scripts/*.sh || true
         shell: bash
+      - name: Prepare UAT env file (.env.uat)
+        shell: bash
+        run: |
+          if [ ! -f docker/.env.uat ]; then
+            cp docker/.env.uat.example docker/.env.uat
+            key=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
+            sed -i.bak "s/^SECRET_KEY=.*/SECRET_KEY=${key}/" docker/.env.uat && rm -f docker/.env.uat.bak
+          fi
       - name: Deploy UAT
         shell: bash
         run: |
@@ -114,6 +122,14 @@ jobs:
       - name: Ensure scripts are executable
         run: chmod +x scripts/*.sh || true
         shell: bash
+      - name: Prepare PROD env file (.env.prod)
+        shell: bash
+        run: |
+          if [ ! -f docker/.env.prod ]; then
+            cp docker/.env.prod.example docker/.env.prod
+            key=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
+            sed -i.bak "s/^SECRET_KEY=.*/SECRET_KEY=${key}/" docker/.env.prod && rm -f docker/.env.prod.bak
+          fi
       - name: Deploy PROD (blue/green)
         shell: bash
         run: |

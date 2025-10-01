@@ -3,7 +3,13 @@ __pycache__/
 .pytest_cache/
 .venv/
 Lib/
-Scripts/
+
+# Ignore Windows virtualenv Scripts directory but keep our repo's shell scripts
+[Ss]cripts/
+!scripts/
+scripts/*
+!scripts/deploy_blue_green_local.sh
+!scripts/wait_for_http.sh
 
 # Local env files
 docker/.env.uat
