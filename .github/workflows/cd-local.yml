@@ -32,6 +32,11 @@ on:
         required: true
         default: true
         type: boolean
+      prune_uat:
+        description: "Prune UAT DB volume before deploy (apply schema changes)"
+        required: false
+        default: false
+        type: boolean
       target:
         description: "Target for rollback (uat or prod). Used only when action=rollback"
         required: false
@@ -72,6 +77,7 @@ jobs:
       IMAGE_NAME: ${{ inputs.image_name || 'ghcr.io/example-org/fintech-test/bank-api' }}
       IMAGE_TAG: ${{ inputs.image_tag || (github.sha) }}
       RUN_SMOKE: ${{ inputs.run_smoke }}
+      PRUNE_UAT: ${{ inputs.prune_uat }}
     steps:
       - uses: actions/checkout@v4
       - name: GHCR login (only when MODE=image)
@@ -91,7 +97,7 @@ jobs:
       - name: Deploy UAT
         shell: bash
         run: |
-          bash scripts/deploy_blue_green_local.sh TARGET=uat MODE=$MODE IMAGE_NAME=$IMAGE_NAME IMAGE_TAG=$IMAGE_TAG RUN_SMOKE=$RUN_SMOKE
+          bash scripts/deploy_blue_green_local.sh TARGET=uat MODE=$MODE IMAGE_NAME=$IMAGE_NAME IMAGE_TAG=$IMAGE_TAG RUN_SMOKE=$RUN_SMOKE PRUNE_UAT=$PRUNE_UAT
 
   approval:
     name: Approval for Prod
