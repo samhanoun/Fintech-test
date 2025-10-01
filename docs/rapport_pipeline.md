@@ -1,6 +1,5 @@
 
-# 🚀 Rapport professionnel – Pipeline CI/CD *Fintech-test*  
-*Généré à partir des artefacts fournis (tests, couverture, sécurité). Langue : français.*
+# Rapport professionnel – Pipeline CI/CD *Fintech-test*  
 
 ---
 
@@ -134,11 +133,10 @@
 
 ---
 
-## 7) TL;DR
+## 7) Résumé
 
 - ✅ Tests passent (2/2).  
 - 📊 Couverture **50 %** → dette sur `auth` et `transactions`.  
 - 🛡️ Bandit : 1 **High** (debug), 1 **Medium** (bind).  
-- 🧩 CVEs dépendances/image : non fournis.
 
 ---
