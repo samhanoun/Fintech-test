@@ -1,0 +1,52 @@
+version: "3.9"
+
+# UAT stack: Postgres + API (single instance), host ports 5433 (db) and 5001 (api)
+services:
+  db:
+    image: postgres:16
+    container_name: fintech_uat_db
+    restart: unless-stopped
+    env_file:
+      - .env.uat
+    environment:
+      # Fallbacks if not provided in .env.uat
+      POSTGRES_DB: ${POSTGRES_DB:-bankdb}
+      POSTGRES_USER: ${POSTGRES_USER:-bankuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bankpass}
+    ports:
+      - "5433:5432"  # host:container
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - uat_pgdata:/var/lib/postgresql/data
+
+  api:
+    # Both 'image' and 'build' are provided so you can choose MODE=image (pull) or MODE=build (local build)
+    image: ${IMAGE_NAME:-ghcr.io/example-org/fintech-test/bank-api}:${IMAGE_TAG:-latest}
+    build:
+      context: ../app_bank
+      dockerfile: Dockerfile
+    container_name: fintech_uat_api
+    restart: unless-stopped
+    env_file:
+      - .env.uat
+    environment:
+      # Enforce production mode in UAT
+      FLASK_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "5001:5000"  # host:container, app listens on 5000 in the container
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys;\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\ntry:\n  urllib.request.urlopen('http://localhost:5000/health', timeout=3)\n  sys.exit(0)\nexcept Exception:\n  sys.exit(1)\" "]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  uat_pgdata:
+    name: fintech_uat_pgdata

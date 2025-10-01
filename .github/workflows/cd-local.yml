@@ -1,0 +1,136 @@
+name: CD Local (UAT & Prod)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "What to run: deploy or rollback"
+        required: true
+        default: deploy
+        type: choice
+        options: [deploy, rollback]
+      mode:
+        description: "Deployment mode (image=pull from GHCR, build=local)"
+        required: true
+        default: image
+        type: choice
+        options: [image, build]
+      image_name:
+        description: "Container image name (when mode=image)"
+        required: false
+        default: ghcr.io/example-org/fintech-test/bank-api
+      image_tag:
+        description: "Image tag to deploy (e.g., staging or sha)"
+        required: false
+        default: staging
+      run_smoke:
+        description: "Run k6 smoke test after deploy"
+        required: true
+        default: true
+        type: boolean
+      target:
+        description: "Target for rollback (uat or prod). Used only when action=rollback"
+        required: false
+        default: uat
+        type: choice
+        options: [uat, prod]
+      image_tag_previous:
+        description: "Previous image tag/SHA for rollback (required when action=rollback)"
+        required: false
+        default: ""
+  push:
+    tags:
+      - 'v*'
+
+env: {}
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  setup-runner-check:
+    name: Check self-hosted runner
+    runs-on: [self-hosted, local]
+    steps:
+      - name: Print Docker & Compose version
+        run: |
+          docker version
+          docker compose version
+
+  deploy-uat:
+    name: Deploy to UAT (local)
+    needs: setup-runner-check
+    runs-on: [self-hosted, local]
+    if: ${{ inputs.action == 'deploy' }}
+    env:
+      MODE: ${{ inputs.mode || 'image' }}
+      IMAGE_NAME: ${{ inputs.image_name || 'ghcr.io/example-org/fintech-test/bank-api' }}
+      IMAGE_TAG: ${{ inputs.image_tag || (github.sha) }}
+      RUN_SMOKE: ${{ inputs.run_smoke }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: GHCR login (only when MODE=image)
+        if: env.MODE == 'image'
+        run: echo ${{ github.token }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Ensure scripts are executable
+        run: chmod +x scripts/*.sh || true
+        shell: bash
+      - name: Deploy UAT
+        shell: bash
+        run: |
+          bash scripts/deploy_blue_green_local.sh TARGET=uat MODE=$MODE IMAGE_NAME=$IMAGE_NAME IMAGE_TAG=$IMAGE_TAG RUN_SMOKE=$RUN_SMOKE
+
+  approval:
+    name: Approval for Prod
+    needs: deploy-uat
+    runs-on: [self-hosted, local]
+    if: ${{ inputs.action == 'deploy' }}
+    environment:
+      name: production
+    steps:
+      - name: Await manual approval in Environment gate
+        run: echo "Approve in the Production environment gate to continue"
+
+  deploy-prod:
+    name: Deploy to PROD (local, blue/green)
+    needs: approval
+    runs-on: [self-hosted, local]
+    if: ${{ inputs.action == 'deploy' }}
+    env:
+      MODE: ${{ inputs.mode || 'image' }}
+      IMAGE_NAME: ${{ inputs.image_name || 'ghcr.io/example-org/fintech-test/bank-api' }}
+      IMAGE_TAG: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') && github.ref_name || (inputs.image_tag || github.sha) }}
+      RUN_SMOKE: ${{ inputs.run_smoke }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: GHCR login (only when MODE=image)
+        if: env.MODE == 'image'
+        run: echo ${{ github.token }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Ensure scripts are executable
+        run: chmod +x scripts/*.sh || true
+        shell: bash
+      - name: Deploy PROD (blue/green)
+        shell: bash
+        run: |
+          bash scripts/deploy_blue_green_local.sh TARGET=prod MODE=$MODE IMAGE_NAME=$IMAGE_NAME IMAGE_TAG=$IMAGE_TAG RUN_SMOKE=$RUN_SMOKE
+
+  rollback:
+    name: Rollback (manual)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'rollback' && inputs.image_tag_previous != '' }}
+    runs-on: [self-hosted, local]
+    steps:
+      - uses: actions/checkout@v4
+      - name: GHCR login (optional)
+        run: echo ${{ github.token }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin || true
+      - name: Ensure scripts are executable
+        run: chmod +x scripts/*.sh || true
+        shell: bash
+      - name: Rollback deploy
+        shell: bash
+        run: |
+          if [ "${{ inputs.target }}" = "uat" ]; then
+            bash scripts/deploy_blue_green_local.sh TARGET=uat MODE=image IMAGE_TAG='${{ inputs.image_tag_previous }}'
+          else
+            bash scripts/deploy_blue_green_local.sh TARGET=prod MODE=image IMAGE_TAG='${{ inputs.image_tag_previous }}'
+          fi
