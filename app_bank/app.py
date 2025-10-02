@@ -4,6 +4,7 @@ import os
 from extensions import db, login_manager
 import time
 from models import User
+from sqlalchemy import text
 
 load_dotenv()
 
@@ -48,6 +49,30 @@ def create_app():
                     raise
                 print(f"DB not ready yet, retrying ({retries})... {e}")
                 time.sleep(2)
+
+        # Lightweight in-place migration: ensure password_hash column is wide enough on Postgres
+        try:
+            uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+            if uri.startswith("postgresql"):
+                # Check current length from information_schema; if < 200, widen to VARCHAR(255)
+                with db.engine.begin() as conn:
+                    current_len = conn.execute(
+                        text(
+                            """
+                            SELECT character_maximum_length
+                            FROM information_schema.columns
+                            WHERE table_schema = current_schema()
+                              AND table_name = 'user'
+                              AND column_name = 'password_hash'
+                            """
+                        )
+                    ).scalar()
+                    if current_len is not None and current_len < 200:
+                        conn.execute(text('ALTER TABLE "user" ALTER COLUMN password_hash TYPE VARCHAR(255);'))
+                        print("✅ Migrated user.password_hash to VARCHAR(255)")
+        except Exception as e:
+            # Non-fatal; app may still work if schema already correct or on SQLite
+            print(f"Schema migration check skipped/failed: {e}")
 
         # Seed only if database is empty
         if User.query.count() == 0:
