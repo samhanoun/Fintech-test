@@ -149,6 +149,7 @@ jobs:
         # Run a tiny k6 smoke test against the local app and export a JSON summary
         run: |
           docker run --rm --network host \
+            -u 0:0 \
             -v "${{ github.workspace }}/k6:/scripts" \
             grafana/k6:0.51.0 run \
               --vus 1 --duration 10s \
@@ -160,6 +161,7 @@ jobs:
         # Heavier load test, disabled by default and only on workflow_dispatch with input true
         run: |
           docker run --rm --network host \
+            -u 0:0 \
             -v "${{ github.workspace }}/k6:/scripts" \
             -e BASE_URL=http://localhost:5000 \
             grafana/k6:0.51.0 run \

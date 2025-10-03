@@ -4,7 +4,8 @@ import os
 from extensions import db, login_manager
 import time
 from models import User
-from sqlalchemy import text
+from sqlalchemy import text, event
+import sqlite3
 
 load_dotenv()
 
@@ -16,6 +17,13 @@ def create_app():
     db_path = os.getenv("DATABASE_URL", "sqlite:///./transactions.db")
     app.config["SQLALCHEMY_DATABASE_URI"] = db_path
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    # Improve SQLite behavior under concurrent load (k6 in CI):
+    if db_path.startswith("sqlite"):
+        # Allow cross-thread usage and increase busy timeout
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+            "pool_pre_ping": True,
+            "connect_args": {"check_same_thread": False, "timeout": 30},
+        }
 
     # Initialiser extensions
     db.init_app(app)
@@ -42,6 +50,15 @@ def create_app():
         while True:
             try:
                 db.create_all()
+                # For SQLite, tune pragmas after DB is initialized to improve concurrency
+                if db_path.startswith("sqlite"):
+                    try:
+                        with db.engine.begin() as conn:
+                            conn.exec_driver_sql("PRAGMA journal_mode=WAL;")
+                            conn.exec_driver_sql("PRAGMA busy_timeout=5000;")
+                        print("SQLite PRAGMA set: WAL + busy_timeout=5000ms")
+                    except Exception as e:  # pragma: no cover - non-critical
+                        print(f"SQLite PRAGMA setup skipped: {e}")
                 break
             except Exception as e:
                 retries += 1
