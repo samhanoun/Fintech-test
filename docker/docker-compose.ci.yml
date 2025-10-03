@@ -1,4 +1,3 @@
-version: '3.9'
 services:
   bank_api:
     image: bank-api:ci  # built in CI job

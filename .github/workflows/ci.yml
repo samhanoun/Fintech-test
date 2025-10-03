@@ -156,9 +156,8 @@ jobs:
               --summary-export=/scripts/k6-summary.json \
               /scripts/perf-smoke.js
 
-      - name: k6 performance load (optional)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_load_test == 'true' }}
-        # Heavier load test, disabled by default and only on workflow_dispatch with input true
+      - name: k6 performance load
+        # Heavier load test, now always executed as part of CI
         run: |
           docker run --rm --network host \
             -u 0:0 \
@@ -203,8 +202,7 @@ jobs:
           path: k6/k6-summary.json
           retention-days: 7
 
-      - name: Upload k6 load summary (optional)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_load_test == 'true' }}
+      - name: Upload k6 load summary
         uses: actions/upload-artifact@v4
         with:
           name: k6-summary-load
