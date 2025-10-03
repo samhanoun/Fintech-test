@@ -86,7 +86,7 @@ jobs:
             echo "RUN_SMOKE=${{ inputs.run_smoke }}" >> $GITHUB_ENV
             echo "PRUNE_UAT=${{ inputs.prune_uat }}" >> $GITHUB_ENV
           else
-            echo "MODE=image" >> $GITHUB_ENV
+            echo "MODE=build" >> $GITHUB_ENV
             echo "IMAGE_NAME=ghcr.io/example-org/fintech-test/bank-api" >> $GITHUB_ENV
             echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
             echo "RUN_SMOKE=true" >> $GITHUB_ENV
@@ -149,7 +149,7 @@ jobs:
             echo "RUN_SMOKE=${{ inputs.run_smoke }}" >> $GITHUB_ENV
           else
             # Tags v* -> use tag name as IMAGE_TAG
-            echo "MODE=image" >> $GITHUB_ENV
+            echo "MODE=build" >> $GITHUB_ENV
             echo "IMAGE_NAME=ghcr.io/example-org/fintech-test/bank-api" >> $GITHUB_ENV
             echo "IMAGE_TAG=${{ github.ref_name }}" >> $GITHUB_ENV
             echo "RUN_SMOKE=true" >> $GITHUB_ENV
