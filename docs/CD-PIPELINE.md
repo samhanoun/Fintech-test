@@ -103,8 +103,9 @@ Fichier: `.github/workflows/cd-local.yml`
 
 Déclencheurs:
 
-- Manuels: `workflow_dispatch` (inputs)
-- Tags `v*`: déploiements de versions taguées
+- Push sur `main`: déclenche automatiquement un déploiement UAT local (runner self‑hosted requis). Par défaut en `MODE=build` pour ne pas dépendre d’un registry.
+- Tags `v*`: déploiement versionné avec gate d’approbation vers PROD (blue/green). Par défaut en `MODE=build` dans ce repo, mais conseillé en `MODE=image` si vous publiez vos images via la CI.
+- Manuels: `workflow_dispatch` (inputs) pour lancer/paramétrer un déploiement ou un rollback à la demande.
 
 Inputs (principaux):
 
@@ -151,6 +152,21 @@ Accès:
 
 - UAT: <http://localhost:5001> (santé: `/health`)
 - PROD: <http://localhost:5002> (santé: `/health`)
+
+Vérifier l’application (UAT et PROD):
+- URL d’accueil: `http://localhost:5001` (UAT) ou `http://localhost:5002` (PROD)
+
+- Auth:
+   - S’inscrire: `/register` (formulaire)
+   - Se connecter: `/login` (formulaire)
+   - Tableau de bord (protégé): `/dashboard`
+
+- Comptes de test (semés automatiquement si DB vide): `admin`, `alice`, `bob`, `charlie` avec mot de passe `password123`.
+
+- Base de données:
+   - UAT Postgres: port hôte `5433`
+   - PROD Postgres: port hôte `5434`
+   - Exemple psql UAT: `psql -h localhost -p 5433 -U bankuser -d bankdb`
 
 ---
 
@@ -215,4 +231,4 @@ Accès:
 
 ---
 
-En cas de doute, ouvrez un ticket (Issues) et mentionnez un mainteneur. Ce guide vise des collègues qui découvrent le CD: n’hésitez pas à proposer des améliorations.
+
