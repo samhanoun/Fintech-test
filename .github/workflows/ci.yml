@@ -8,7 +8,14 @@ name: CI
 on:
   push: {}
   pull_request: {}
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      run_load_test:
+        description: "Run k6 perf load (optional)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
 
 concurrency:
   # Cancel in-progress runs for the same branch to save minutes
@@ -148,6 +155,17 @@ jobs:
               --summary-export=/scripts/k6-summary.json \
               /scripts/perf-smoke.js
 
+      - name: k6 performance load (optional)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_load_test == 'true' }}
+        # Heavier load test, disabled by default and only on workflow_dispatch with input true
+        run: |
+          docker run --rm --network host \
+            -v "${{ github.workspace }}/k6:/scripts" \
+            -e BASE_URL=http://localhost:5000 \
+            grafana/k6:0.51.0 run \
+              --summary-export=/scripts/k6-summary-load.json \
+              /scripts/perf-load.js
+
       - name: Upload JUnit and Coverage artifacts
         # Store unit + integration JUnit and coverage.xml as artifacts
         uses: actions/upload-artifact@v4
@@ -181,6 +199,14 @@ jobs:
         with:
           name: k6-summary
           path: k6/k6-summary.json
+          retention-days: 7
+
+      - name: Upload k6 load summary (optional)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_load_test == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-summary-load
+          path: k6/k6-summary-load.json
           retention-days: 7
 
       - name: Publish SARIF (Trivy) to code scanning
