@@ -48,6 +48,8 @@ on:
         required: false
         default: ""
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
@@ -71,18 +73,33 @@ jobs:
     name: Deploy to UAT (local)
     needs: setup-runner-check
     runs-on: self-hosted
-    if: ${{ inputs.action == 'deploy' }}
-    env:
-      MODE: ${{ inputs.mode || 'image' }}
-      IMAGE_NAME: ${{ inputs.image_name || 'ghcr.io/example-org/fintech-test/bank-api' }}
-      IMAGE_TAG: ${{ inputs.image_tag || (github.sha) }}
-      RUN_SMOKE: ${{ inputs.run_smoke }}
-      PRUNE_UAT: ${{ inputs.prune_uat }}
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.action == 'deploy') }}
     steps:
       - uses: actions/checkout@v4
+      - name: Set deployment variables (UAT)
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "MODE=${{ inputs.mode }}" >> $GITHUB_ENV
+            echo "IMAGE_NAME=${{ inputs.image_name }}" >> $GITHUB_ENV
+            echo "IMAGE_TAG=${{ inputs.image_tag }}" >> $GITHUB_ENV
+            echo "RUN_SMOKE=${{ inputs.run_smoke }}" >> $GITHUB_ENV
+            echo "PRUNE_UAT=${{ inputs.prune_uat }}" >> $GITHUB_ENV
+          else
+            echo "MODE=image" >> $GITHUB_ENV
+            echo "IMAGE_NAME=ghcr.io/example-org/fintech-test/bank-api" >> $GITHUB_ENV
+            echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
+            echo "RUN_SMOKE=true" >> $GITHUB_ENV
+            echo "PRUNE_UAT=false" >> $GITHUB_ENV
+          fi
       - name: GHCR login (only when MODE=image)
-        if: env.MODE == 'image'
-        run: echo ${{ github.token }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        shell: bash
+        run: |
+          if [ "$MODE" = "image" ]; then
+            echo ${{ github.token }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          else
+            echo "MODE=$MODE, skipping GHCR login"
+          fi
       - name: Ensure scripts are executable
         run: chmod +x scripts/*.sh || true
         shell: bash
@@ -103,7 +120,7 @@ jobs:
     name: Approval for Prod
     needs: deploy-uat
     runs-on: self-hosted
-    if: ${{ inputs.action == 'deploy' }}
+    if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.action == 'deploy') }}
     environment:
       name: production
     steps:
@@ -114,17 +131,37 @@ jobs:
     name: Deploy to PROD (local, blue/green)
     needs: approval
     runs-on: self-hosted
-    if: ${{ inputs.action == 'deploy' }}
-    env:
-      MODE: ${{ inputs.mode || 'image' }}
-      IMAGE_NAME: ${{ inputs.image_name || 'ghcr.io/example-org/fintech-test/bank-api' }}
-      IMAGE_TAG: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') && github.ref_name || (inputs.image_tag || github.sha) }}
-      RUN_SMOKE: ${{ inputs.run_smoke }}
+    if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.action == 'deploy') }}
     steps:
       - uses: actions/checkout@v4
+      - name: Set deployment variables (PROD)
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "MODE=${{ inputs.mode }}" >> $GITHUB_ENV
+            echo "IMAGE_NAME=${{ inputs.image_name }}" >> $GITHUB_ENV
+            # if image_tag empty, fallback to sha
+            if [ -n "${{ inputs.image_tag }}" ]; then
+              echo "IMAGE_TAG=${{ inputs.image_tag }}" >> $GITHUB_ENV
+            else
+              echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
+            fi
+            echo "RUN_SMOKE=${{ inputs.run_smoke }}" >> $GITHUB_ENV
+          else
+            # Tags v* -> use tag name as IMAGE_TAG
+            echo "MODE=image" >> $GITHUB_ENV
+            echo "IMAGE_NAME=ghcr.io/example-org/fintech-test/bank-api" >> $GITHUB_ENV
+            echo "IMAGE_TAG=${{ github.ref_name }}" >> $GITHUB_ENV
+            echo "RUN_SMOKE=true" >> $GITHUB_ENV
+          fi
       - name: GHCR login (only when MODE=image)
-        if: env.MODE == 'image'
-        run: echo ${{ github.token }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        shell: bash
+        run: |
+          if [ "$MODE" = "image" ]; then
+            echo ${{ github.token }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          else
+            echo "MODE=$MODE, skipping GHCR login"
+          fi
       - name: Ensure scripts are executable
         run: chmod +x scripts/*.sh || true
         shell: bash
