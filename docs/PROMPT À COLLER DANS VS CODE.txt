@@ -1,0 +1,260 @@
+— PROMPT À COLLER DANS VS CODE (COMPLET) —
+
+Tu es un assistant d’ingénierie logiciel. Crée un projet complet type “Fintech-test” en Python/Flask, Dockerisé, avec CI/CD GitHub Actions, blue/green local, scans sécurité, tests unitaires/intégration, perf k6 (smoke + load), rollback, docs FR. Le projet doit être reproductible sur Windows (préférer WSL2 pour le runner self-hosted). Respecte scrupuleusement les spécifications ci-dessous.
+
+OBJECTIF GLOBAL
+
+Application Flask simple (banque fictive): routes auth (register/login/logout), dashboard protégé, transactions placeholder, health.
+Bases de données:
+CI/dev: SQLite (en volume).
+UAT/Prod (local): PostgreSQL 16 (ports hôte 5433 et 5434).
+Containerisation: Docker + Docker Compose (stacks CI, UAT, PROD blue/green).
+CI: build, tests unitaires/intégration, pip-audit, Bandit, Trivy (SARIF), ZAP Baseline (non-bloquant), k6 smoke + k6 load, artefacts.
+CD local (runner self-hosted): UAT auto sur push main (MODE=build), Prod sur tag v* avec gate d’approbation (MODE=build par défaut mais documente MODE=image), blue/green, rollback.
+Docs en français (CI-PIPELINE.md et CD-PIPELINE.md).
+Scripts de déploiement blue/green et d’attente HTTP.
+Qualité: .coveragerc, .gitattributes (LF pour .sh), healthchecks robustes.
+ARBORESCENCE ATTENDUE
+
+app_bank/
+app.py
+extensions.py
+models.py
+routes/
+auth.py
+transactions.py
+health.py
+main.py
+templates/ (HTML basique)
+base.html
+login.html
+register.html
+dashboard.html
+transactions.html
+transfer.html
+trading.html
+accounting.html
+create_account.html
+static/
+style.css
+css/
+dashboard.css
+login.css
+requirements.txt
+Dockerfile
+docker/
+docker-compose.ci.yml
+docker-compose.uat.yml
+docker-compose.prod.yml
+.env.uat.example
+.env.prod.example
+zap-baseline.conf
+scripts/
+wait_for_http.sh
+deploy_blue_green_local.sh
+k6/
+perf-smoke.js
+perf-load.js
+.github/workflows/
+ci.yml
+cd-local.yml
+docs/
+CI-PIPELINE.md
+CD-PIPELINE.md
+tests/
+unit/
+test_models.py (ex: hashing mot de passe)
+test_health.py (ex: /health 200 et JSON ok)
+integration/
+test_health_integration.py (GET http://localhost:5000/health)
+.coveragerc
+.gitattributes
+.gitignore (classique Python + env + artefacts)
+DÉTAILS APPLI FLASK
+
+app_bank/app.py:
+create_app() configure Flask, SECRET_KEY (default dev), SQLALCHEMY_DATABASE_URI via env DATABASE_URL (default sqlite:///./transactions.db), SQLALCHEMY_TRACK_MODIFICATIONS=False.
+Initialise db et login_manager (login_view=auth.login).
+Enregistre blueprints: auth, transactions, health, main.
+Démarrage: db.create_all() avec retry; si SQLite, activer PRAGMA journal_mode=WAL et busy_timeout; si Postgres, contrôler la largeur de user.password_hash et “ALTER COLUMN … TYPE VARCHAR(255)” si < 200; seed des utilisateurs si DB vide: admin, alice, bob, charlie (password123) avec soldes tests.
+app.run(host=0.0.0.0, port=5000, debug=False).
+app_bank/extensions.py:
+from flask_sqlalchemy import SQLAlchemy; db = SQLAlchemy()
+from flask_login import LoginManager; login_manager = LoginManager()
+app_bank/models.py:
+User (id, username unique, password_hash String(255), balance Decimal/Numeric); méthodes set_password/check_password (werkzeug.security); repr.
+Transaction (id, user_id FK, account_id String, amount Numeric, currency String, type String, created_at DateTime).
+routes:
+health.py: /health: renvoie JSON {"status": "ok"} 200.
+main.py: / (redirect login/dashboard), /dashboard (login_required, affiche infos user).
+auth.py:
+GET/POST /login: form username/password, login_user, redirige dashboard si ok; sinon flash erreur.
+GET /logout: login_required, logout_user puis redirect login.
+GET/POST /register: vérifie unicité username; crée l’utilisateur balance=0, set_password; commit; flash succès; redirect login.
+transactions.py: endpoints placeholders (ex: /transactions liste vide) pour future extension.
+templates: HTML minimal Bootstrap-like (base.html avec block content; formulaires login/register; dashboard simple).
+requirements.txt: Flask, Flask-SQLAlchemy, Flask-Login, python-dotenv, psycopg2-binary, requests, pytest, pytest-cov, werkzeug, sqlalchemy.
+DOCKER
+
+app_bank/Dockerfile:
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt puis pip install --no-cache-dir -r requirements.txt
+COPY . .
+ENV FLASK_APP=app.py FLASK_ENV=production DATABASE_URL=sqlite:///./transactions.db
+EXPOSE 5000
+CMD ["python", "app.py"]
+docker/docker-compose.ci.yml:
+service bank_api (image: bank-api:ci construit en CI), ports “5000:5000”, volume /data, DATABASE_URL=sqlite:////data/transactions.db, healthcheck HTTP sur /health. Pas de clé “version”.
+docker/docker-compose.uat.yml:
+db: postgres:16, ports “5433:5432”, healthcheck pg_isready, volume nommé uat_pgdata.
+api: image 
+𝐼
+𝑀
+𝐴
+𝐺
+𝐸
+𝑁
+𝐴
+𝑀
+𝐸
+:
+IMAGE 
+N
+​
+ AME:{IMAGE_TAG} et build context ../app_bank; ports “5001:5000”; depends_on db:healthy; FLASK_ENV=production; healthcheck HTTP /health.
+docker/docker-compose.prod.yml:
+db: postgres:16, ports “5434:5432”, healthcheck, volume prod_pgdata.
+api_blue et api_green: mêmes spec que UAT api; profiles [blue]/[green]; un seul publie “5002:5000” à la fois; healthcheck HTTP /health.
+SCRIPTS (LF via .gitattributes; chmod +x dans workflows)
+
+scripts/wait_for_http.sh:
+Boucle sur curl -fsS URL avec timeout/bacoff, échoue au bout d’un délai configurable; echo diagnostics.
+scripts/deploy_blue_green_local.sh:
+Paramètres: TARGET=uat|prod, MODE=image|build, IMAGE_NAME, IMAGE_TAG, RUN_SMOKE=true|false, PRUNE_UAT=true|false.
+UAT:
+Si MODE=image, docker login ghcr et docker compose -f docker-compose.uat.yml --profile… up -d avec variables.
+Si MODE=build, compose build puis up -d.
+Attendre santé via wait_for_http.sh sur http://localhost:5001/health; si échec: logs compose, ps, exit 1.
+Optionnel: k6 smoke contre http://localhost:5001/health.
+PROD (blue/green):
+Démarre la couleur inactive sans publier 5002, attend santé interne (localhost:5000/health), bascule port 5002 en arrêtant l’ancienne couleur et en (re)publiant la nouvelle (utilise --remove-orphans).
+Vérifie santé externe http://localhost:5002/health; optionnel: k6 smoke.
+Collecte diagnostics sur échec (compose ps, logs, etc.).
+Nettoyage orphelins via --remove-orphans.
+K6
+
+k6/perf-smoke.js:
+1 VU / 10s; GET BASE_URL/health; thresholds: http_req_failed < 1%, p95 < 800ms.
+k6/perf-load.js:
+Parcours: GET /health; POST /register (uniquement à la 1ère itération par VU: username=user_${VU}, password=Test123!); POST /login; GET /dashboard; sleep(1).
+Stages CI-friendly: jusqu’à ~40 VU puis maintien, puis descente.
+Thresholds: p95 < 800ms; http_req_failed < 10%; “errors” (métrique métier) < 20%.
+Gestion cookies sessions auto; formulaires form-encoded.
+Note: L’appli ajuste SQLite (WAL + busy_timeout) pour éviter les locks sous charge.
+Les exécutions en CI doivent lancer les conteneurs k6 en root (-u 0:0) pour écrire les summary sur le volume monté.
+Artefacts: k6-summary.json (smoke), k6-summary-load.json (load).
+CI GITHUB ACTIONS (.github/workflows/ci.yml)
+
+Triggers: push, pull_request, workflow_dispatch.
+Steps:
+checkout
+mkdir reports et zap-reports
+docker build -t bank-api:ci app_bank
+docker compose -f docker-compose.ci.yml up -d
+attendre /health (boucle curl ~30s)
+setup-python 3.11 (pour pip-audit/bandit)
+pip install bandit pip-audit
+Unit tests (conteneur python:3.11-slim) avec pytest-cov; artefacts junit-unit.xml, coverage.xml
+Integration tests (conteneur python --network host) vers http://localhost:5000; artefact junit-integration.xml
+pip-audit sur requirements.txt → reports/pip-audit.json (non-bloquant)
+bandit -r app_bank → reports/bandit.json (non-bloquant)
+Trivy scan image bank-api:ci → reports/trivy.sarif
+ZAP Baseline (owasp/zap2docker-stable) sur http://localhost:5000 (non-bloquant) → zap-reports/*
+k6 smoke (docker run --rm --network host -u 0:0 -v $workspace/k6:/scripts grafana/k6:0.51.0 run --vus 1 --duration 10s --summary-export=/scripts/k6-summary.json /scripts/perf-smoke.js)
+k6 load (toujours exécuté) → /scripts/k6-summary-load.json (BASE_URL=http://localhost:5000)
+upload artifacts: test-reports, security-reports, zap-reports, k6-summary, k6-summary-load
+publish SARIF to code scanning (non-bloquant)
+docker compose down -v
+Slack notify on failure (si SLACK_WEBHOOK_URL)
+Nettoie “version” déprécié dans compose CI.
+CD GITHUB ACTIONS (.github/workflows/cd-local.yml)
+
+Runners: self-hosted (préférer WSL2 sur Windows).
+Triggers:
+push sur main → déploiement UAT local auto (MODE=build).
+push tags ‘v*’ → UAT puis gate d’approbation “production” puis PROD blue/green (par défaut MODE=build; documenter qu’on peut passer en MODE=image si images publiées).
+workflow_dispatch: deploy/rollback paramétrables (mode, image_name, image_tag, run_smoke, prune_uat, target, image_tag_previous).
+Jobs:
+setup-runner-check (docker version + docker compose version).
+deploy-uat: checkout; set $GITHUB_ENV selon l’event (push vs dispatch); GHCR login uniquement si MODE=image; chmod +x scripts/*.sh; préparer docker/.env.uat (générer SECRET_KEY si absent); script deploy_blue_green_local.sh TARGET=uat MODE=$MODE …
+approval: environment production (gate d’approbation).
+deploy-prod: même logique; docker/.env.prod; script deploy_blue_green_local.sh TARGET=prod MODE=$MODE …
+rollback (manual): si workflow_dispatch action=rollback et image_tag_previous fourni; pour target uat/prod en MODE=image.
+Fichiers docker/.env.uat.example et docker/.env.prod.example: variables POSTGRES_DB, USER, PASSWORD; SECRET_KEY placeholder; DATABASE_URL pour l’API (postgresql://user:pass@db:5432/bankdb); etc.
+DOCUMENTATION
+
+CI-PIPELINE.md (FR):
+Vue d’ensemble CI, triggers, étapes détaillées (build/test/scans/ZAP/k6), artefacts, Code scanning, exécution locale, FAQ, prochaines évolutions.
+Section k6:
+5.9 smoke (déjà) + 5.9 bis load (parcours détaillé; stages, thresholds; artefact).
+Comparaison “k6 smoke vs k6 load” (portée, intensité, risques, seuils, sorties).
+CD-PIPELINE.md (FR):
+Runners self-hosted (WSL2 recommandé), installation, ports requis.
+Architecture Compose (UAT 5001/5433, PROD 5002/5434, blue/green).
+Triggers CD (push main → UAT auto; tags v* → Prod avec gate; dispatch manuel).
+Modes image vs build, recommandations.
+Accès aux applis: UAT http://localhost:5001, PROD http://localhost:5002; santé /health; /register, /login, /dashboard; comptes seed admin/alice/bob/charlie password123.
+Rollback: action=rollback (image), ou revert Git pour UAT (mode build).
+Problèmes résolus (scripts exécutables, timeouts santé, migration password_hash à 255, orphelins, “version” déprécié).
+Fichiers utiles.
+Ajouter captures facultatives (non requis) et liens internes.
+TESTS
+
+tests/unit:
+test_health.py sur create_app() → client test Flask GET /health == 200 & JSON status ok.
+test_models.py: création User, set_password/check_password, str(User).
+tests/integration:
+test_health_integration.py (utilise requests GET http://localhost:5000/health).
+Config pytest pour trouver tests.
+CONFIG QUALITÉ
+
+.coveragerc avec sections run/source=app_bank, paths (inclure variations /work/app_bank, C:\work\app_bank), report show_missing, html directory reports/htmlcov.
+.gitattributes: “.sh text eol=lf” + éventuellement “.py text eol=lf”.
+BONUS/OPTIONNEL
+
+Slack notifications sur échec (secret SLACK_WEBHOOK_URL).
+Publier SARIF Trivy dans Security > Code scanning.
+Ajouter un README.md sommaire avec “how to run locally” et “ports”.
+CRITÈRES D’ACCEPTATION
+
+“docker compose -f docker-compose.ci.yml up -d” expose API sur 5000; “curl http://localhost:5000/health” retourne 200 + {"status":"ok"}.
+CI: toutes les étapes passent; artefacts présents (tests, security, zap, k6).
+CD:
+Push sur main déclenche UAT (port 5001).
+Tag vX.Y.Z déclenche UAT puis gate “production” puis PROD (port 5002).
+Scripts exécutables; bascule blue/green fonctionnelle.
+k6:
+Smoke et load produisent k6-summary*.json; load enregistre un user par VU uniquement à la 1ère itération.
+DB migration:
+password_hash VARCHAR(255) garanti en Postgres; pas d’erreur “value too long”.
+Docs FR complètes (CI-PIPELINE.md, CD-PIPELINE.md) avec URLs/ports et mode image/build.
+LIVRABLES
+
+L’arborescence complète listée plus haut avec le code fonctionnel, workflows CI/CD, scripts, k6, docs, tests, configs.
+Commits propres. Si possible, initialiser un repo git (sans push).
+CONSEILS EXÉCUTION LOCALE (facultatif)
+
+Windows:
+Exécuter Docker Desktop, privilégier WSL2 pour le runner self-hosted.
+Démarrage rapide:
+docker build -t bank-api:ci app_bank
+docker compose -f docker-compose.ci.yml up -d
+curl http://localhost:5000/health
+IMPORTANT
+
+Évite de réutiliser du code externe sous copyright, écris le code de zéro.
+Respecte les ports: 5000 (CI), 5001 (UAT), 5002 (PROD), 5433 (UAT DB), 5434 (PROD DB).
+Sers-toi des healthchecks et des scripts fournis.
+Mets k6 en root (-u 0:0) pour écrire les summaries sur volume.
+— FIN DU PROMPT —
