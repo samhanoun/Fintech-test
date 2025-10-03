@@ -25,7 +25,7 @@
 
 ### 3.1 Chiffres clés
 
-- **Couverture totale** : **50 % (114/230 lignes)**. Rapport généré le **30/09/2025 18:18 +0200**.  
+- **Couverture totale** : **50 % (114/230 lignes)**. Rapport généré le **03/10/2025 10:18 +0200**.  
 - Détail par fichier :
 
 | Fichier | Stmts | Manquantes | Couverture |
