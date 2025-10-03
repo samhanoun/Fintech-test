@@ -6,7 +6,7 @@ Ce document explique clairement, pas à pas, ce que fait le pipeline CI/CD de ce
 
 ## 1) Vue d’ensemble
 
-- But: vérifier automatiquement que l’application Flask (conteneurisée) se construit, démarre, passe les tests (unitaires et intégration), est scannée côté sécurité (SCA/SAST/scan image/DAST), et résiste à un mini test de performance (k6 smoke).
+- But: vérifier automatiquement que l’application Flask (conteneurisée) se construit, démarre, passe les tests (unitaires et intégration), est scannée côté sécurité (SCA/SAST/scan image/DAST), et résiste à des tests de performance k6: un smoke léger et un test de charge (load) plus réaliste.
 - Où:
   - Local (VS Code + Docker): on peut rejouer l’essentiel manuellement pour valider avant de pousser.
   - GitHub Actions: pipeline automatique sur push/pr/workflow_dispatch.
@@ -37,9 +37,10 @@ Le workflow `.github/workflows/ci.yml` se lance automatiquement sur:
    - Scan image Docker via Trivy → `trivy.sarif` (publie aussi vers Code scanning si activé).
    - DAST (OWASP ZAP Baseline) sur `http://localhost:5000` → HTML + XML (non bloquant).
 7) Test de performance k6 (smoke) → `k6-summary.json`.
-8) Upload de tous les rapports comme artefacts.
-9) Publication SARIF Trivy vers “Code scanning alerts” (non bloquant si Code scanning désactivé).
-10) Teardown (arrêt et suppression des conteneurs/volumes).
+8) Test de performance k6 (load) → `k6-summary-load.json` (scénario réaliste: register/login/dashboard, charge progressive).
+9) Upload de tous les rapports comme artefacts.
+10) Publication SARIF Trivy vers “Code scanning alerts” (non bloquant si Code scanning désactivé).
+11) Teardown (arrêt et suppression des conteneurs/volumes).
 
 ---
 
@@ -115,6 +116,23 @@ Ci-dessous, les steps clés du job “Build, Test, Scan, DAST, Perf”.
 - Sortie: `k6/k6-summary.json`.
 - On peut ajouter des seuils bloquants (p95, erreurs < x%).
 
+### 5.9 bis k6 – Test de performance (load)
+
+- Script: `k6/perf-load.js`.
+- Objectif: simuler un parcours utilisateur plus réaliste avec une charge progressive, sans être trop lourde pour la CI.
+- Parcours couvert par VU (par itérations):
+  1. GET `/health`
+  2. POST `/register` (uniquement lors de la première itération de chaque VU pour limiter les écritures)
+  3. POST `/login`
+  4. GET `/dashboard`
+- Stages par défaut (CI-friendly): montée progressive à ~40 utilisateurs virtuels (VU), maintien, puis descente.
+- Seuils par défaut (adaptés CI): p95 < ~800ms; erreurs HTTP < 10%; erreurs métier < 20%.
+- Détails techniques:
+  - Les formulaires sont envoyés en form-urlencoded.
+  - Les cookies de session sont conservés automatiquement par VU.
+  - Avec SQLite (CI), l’appli active WAL + busy_timeout pour réduire les locks sous charge.
+- Sortie: `k6/k6-summary-load.json`.
+
 ### 5.10 Artefacts & alertes
 
 - Artefacts uploadés:
@@ -122,6 +140,7 @@ Ci-dessous, les steps clés du job “Build, Test, Scan, DAST, Perf”.
   - Sécurité: `reports/pip-audit.json`, `reports/bandit.json`, `reports/trivy.sarif`.
   - DAST: `zap-reports/` (HTML/XML/txt).
   - Perf: `k6/k6-summary.json`.
+  - Perf (load): `k6/k6-summary-load.json`.
 - SARIF Trivy publié vers Code scanning (non bloquant si désactivé).
 
 ### 5.11 Notifications Slack (optionnel)
@@ -281,3 +300,23 @@ Ensuite, ouvrez le fichier `reports/htmlcov/index.html` dans votre navigateur (c
 - Si “No data to report” persiste, vérifiez que `.coveragerc` est bien à la racine du repo (même dossier que `.coverage`) et que la section `[paths]` couvre les préfixes vus dans les avertissements (`C:\\work\\app_bank`, `/work/app_bank`, etc.).
 - Vous pouvez aussi régénérer `.coverage` en relançant localement `pytest --cov=app_bank --cov-report xml:reports/coverage.xml`, ce qui créera un `.coverage` adapté à votre machine.
 - Les patterns `*/work/app_bank` (Linux runners) et `C:\\work\\app_bank` (Windows) couvrent la plupart des cas CI/containers.
+
+---
+
+## 13) Comparaison rapide: k6 smoke vs k6 load
+
+- Portée:
+  - Smoke: vérifie simplement que `/health` répond (disponibilité basique).
+  - Load: rejoue un mini-parcours (register/login/dashboard) avec sessions et écritures.
+- Intensité:
+  - Smoke: 1 VU sur ~10s.
+  - Load: montée jusqu’à ~40 VU avec paliers (CI-friendly), durée plus longue.
+- Risques/effets de bord:
+  - Smoke: aucun effet d’écriture, très sûr.
+  - Load: écritures en base (création d’utilisateurs). Le script limite ces écritures (inscription une seule fois par VU) pour ménager SQLite.
+- Seuils/échecs:
+  - Smoke: seuils généreux, focus sur erreurs réseau/HTTP.
+  - Load: seuils plus exigeants (p95, erreurs HTTP et métier) mais adaptés à l’environnement CI.
+- Sorties:
+  - Smoke: `k6-summary.json`.
+  - Load: `k6-summary-load.json`.
